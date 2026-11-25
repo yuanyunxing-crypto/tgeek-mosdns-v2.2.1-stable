@@ -31,12 +31,15 @@
 
 ```sh
 cd /tmp
-tar -xzf TGEEK-MosDNS-2.2.2-Ads-2.0.6.tar.gz
-cd TGEEK-MosDNS-2.2.2-Ads-2.0.6
-sha256sum -c SHA256SUMS
-sh -n tgeek-mosdns-v2.2.2-stable.sh
-sh -n update-awa-mosdns-rule-v2.0.6.sh
-sh -n prepare-ads-rules.sh
+
+wget -O TGEEK-MosDNS-2.2.2-Ads-2.0.6.tar.gz \
+'https://gh-proxy.com/https://github.com/yuanyunxing-crypto/tgeek-mosdns-v2.2.1-stable/releases/download/TGEEK-MosDNS-2.2.2-Ads-2.0.6/TGEEK-MosDNS-2.2.2-Ads-2.0.6.tar.gz' && \
+tar -xzf TGEEK-MosDNS-2.2.2-Ads-2.0.6.tar.gz && \
+cd TGEEK-MosDNS-2.2.2-Ads-2.0.6 && \
+sha256sum -c SHA256SUMS && \
+sh install.sh
+sh verify.sh
+
 sh -n install.sh
 sh -n upgrade.sh
 sh -n verify.sh
