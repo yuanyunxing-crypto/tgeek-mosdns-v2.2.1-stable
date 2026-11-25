@@ -1,35 +1,45 @@
 # TGEEK MosDNS + Ads Updater 统一安装与维护手册
 
-版本：MosDNS v2.2.1 / Ads Updater v2.0.5 · 2026-11-25 · 实机覆盖升级验收修订版
+版本：MosDNS v2.2.2 / Ads Updater v2.0.6 · 2026-11-25
+
+## 新版统一入口（先阅读适用范围）
+
+- 新设备（已有正常运行的 MosDNS）：`sh install.sh`。
+- 已有 TGEEK v2.2.x：`sh upgrade.sh`，仅替换主程序和更新器，保留现有 Guard 和 cron；不主动重启服务。
+- 两个入口均准备缺失规则。若未引用，安全停止并提示在 LuCI 添加，完成后执行 `/usr/bin/update-awa-mosdns-rule.sh update` 和 `sh verify.sh`。不猜测 UCI 字段。
+- `sh verify.sh` 严格报告全部广告样本；DNS Guard 只要求核心样本双栈通过，其他样本告警。
+- Nikki 缺 timeout：OpenWrt 24.10 执行 `opkg update && opkg install coreutils-timeout`，再检查 yq 和 timeout。
+- 本包为待实机验收版；未发布 GitHub。旧版实机补丁已通过四种客户端响应测试，实际计数与重启仍需验证。
+
+## 更新日志
+
+- MosDNS v2.2.2：DNS Guard 非核心广告样本告警、核心双栈强制验证、未启用时明确提示、程序级升级。
+- Ads Updater v2.0.6：缺失或未引用规则明确报错，保留事务更新与回滚；Nikki timeout 依赖提示。
+- 新增 install.sh、upgrade.sh、verify.sh 统一入口。
 
 ## 1. 适用范围与安装包
 
-- `tgeek-mosdns-v2.2.1-stable.sh`：国内 DoH、可信域名、广告优先级、DNS Guard、每周更新及事务回滚。
-- `update-awa-mosdns-rule-v2.0.5.sh`：AWA、YouTube 每日更新、安全排除、可选 Nikki 自动联动。
+- `tgeek-mosdns-v2.2.2-stable.sh`：国内 DoH、可信域名、广告优先级、DNS Guard、每周更新及事务回滚。
+- `update-awa-mosdns-rule-v2.0.6.sh`：AWA、YouTube 每日更新、安全排除、可选 Nikki 自动联动。
 - `prepare-ads-rules.sh`：首次准备缺失的广告规则；保留现有文件，不修改 UCI 或重启服务。
 
 适用于已经安装并正常运行的 sbwml 系 MosDNS v5（UCI 自动生成 `/var/etc/mosdns.json`），OpenWrt firewall4。不是原版 MosDNS 或 Nikki 的安装器。组合方案要求 MosDNS TCP/UDP 53，Nikki 可选；联动要求正常运行的 Mihomo、API 127.0.0.1:9090、可用的 API 密钥设置、yq、timeout，以及兼容 UCI 混入模式。YAML 混入模式或存在未启用的其他追加配置时会安全停止。首次操作建议在非业务时段，通过 LAN SSH 执行。
 
 ## 2. 上传与备份（所有设备）
 
-将压缩包上传至 `/tmp`，或使用以下已在 TIJIWrt 成功的镜像下载方式（第三方镜像并非可信来源，建议与 GitHub 原始发布的文件摘要比对）：
+在仓库 [Releases](https://github.com/yuanyunxing-crypto/tgeek-mosdns-v2.2.1-stable/releases) 中选择对应版本（需维护者先上传发布附件），下载 `TGEEK-MosDNS-2.2.2-Ads-2.0.6.tar.gz`，上传至 `/tmp`，执行：
 
 ```sh
 cd /tmp
-wget -O TGEEK-MosDNS-2.2.1-Ads-2.0.5.tar.gz \
-'https://gh-proxy.com/https://github.com/yuanyunxing-crypto/tgeek-mosdns-v2.2.1-stable/releases/download/TGEEK-MosDNS-2.2.1-Ads-2.0.5/TGEEK-MosDNS-2.2.1-Ads-2.0.5.tar.gz'
-```
-
-下载后执行以下步骤；每一步成功才继续：
-
-```sh
-cd /tmp
-tar -xzf TGEEK-MosDNS-2.2.1-Ads-2.0.5.tar.gz
-cd TGEEK-MosDNS-2.2.1-Ads-2.0.5
+tar -xzf TGEEK-MosDNS-2.2.2-Ads-2.0.6.tar.gz
+cd TGEEK-MosDNS-2.2.2-Ads-2.0.6
 sha256sum -c SHA256SUMS
-sh -n tgeek-mosdns-v2.2.1-stable.sh
-sh -n update-awa-mosdns-rule-v2.0.5.sh
+sh -n tgeek-mosdns-v2.2.2-stable.sh
+sh -n update-awa-mosdns-rule-v2.0.6.sh
 sh -n prepare-ads-rules.sh
+sh -n install.sh
+sh -n upgrade.sh
+sh -n verify.sh
 umask 077
 sysupgrade -b /tmp/tgeek-before-install.tar.gz
 /etc/init.d/mosdns status
@@ -42,22 +52,14 @@ nslookup baidu.com 127.0.0.1
 
 ## 3. 全新安装（已有正常运行的原版 MosDNS）
 
-### 3.1 安装基础增强
-
 ```sh
-cd /tmp/TGEEK-MosDNS-2.2.1-Ads-2.0.5
-sh tgeek-mosdns-v2.2.1-stable.sh dry-run
-sh tgeek-mosdns-v2.2.1-stable.sh install
-/usr/bin/tgeek-mosdns status
+cd /tmp/TGEEK-MosDNS-2.2.2-Ads-2.0.6
+sh install.sh
 ```
 
-基础安装会调整国内 DoH、关闭原 Apple 优化，必要时重启 MosDNS；不会安装 Nikki。若 dry-run 失败，不执行 install。
+统一入口校验文件摘要、执行主程序预检及安装、安装广告更新器、准备缺失规则。基础安装可能重启 MosDNS。若规则尚未引用，入口会以非零状态停止，但此前完成的程序安装不会自动撤销；无需重复安装，按下节继续。
 
-### 3.2 准备并引用广告规则
-
-```sh
-sh prepare-ads-rules.sh
-```
+### 3.1 广告规则引用与验收
 
 在 LuCI 的 MosDNS 广告规则配置中启用广告过滤，保留已有正常规则，并引用 `/etc/mosdns/rule/awavenue.txt`、`/etc/mosdns/rule/youtubelist.txt`。保存并应用。不同 LuCI 版本菜单名称可能不同。若已经引用，则无需重复添加。保留其他通用广告库，不要把原始 AdGuard `filter.txt` 加入本更新器的 adlist。
 
@@ -68,19 +70,18 @@ nslookup manifest.googlevideo.com 127.0.0.1
 /usr/bin/tgeek-mosdns verify
 ```
 
-确认两条路径均在输出中，广告域名返回 0.0.0.0/::，manifest 域名返回正常 IPv4。v2.0.5 只更新已引用且非空的规则文件，不会自动添加 MosDNS 广告规则配置。`verify` 的其他广告样本若失败，先补齐通用广告库或检查可信域名冲突。
-
-### 3.3 安装广告更新器
+确认两条路径均在输出中，广告域名返回 0.0.0.0/::，manifest 域名返回正常 IPv4。v2.0.6 要求两套规则均已引用且非空，否则明确报错并停止；只更新已引用且非空的规则文件，不会自动添加 MosDNS 广告规则配置。`verify` 的其他广告样本若失败，先补齐通用广告库或检查可信域名冲突。
 
 ```sh
-sh update-awa-mosdns-rule-v2.0.5.sh install
+sh verify.sh --refs
 /usr/bin/update-awa-mosdns-rule.sh --version
 /usr/bin/update-awa-mosdns-rule.sh update
+sh verify.sh
 ```
 
-更新器覆盖安装会备份原脚本；安装本身不创建定时任务。两套规则下载失败时本轮不替换，正常规则无变化时不重启。
+更新器安装本身不创建广告定时任务；下载失败保留旧规则，无变化不重启。完整验收可能因非核心广告样本未通过而返回非零，需查看具体输出。
 
-### 3.4 可选 DNS Guard
+### 3.2 可选 DNS Guard
 
 仅当 MosDNS 独占 53 且原生 DNS 重定向及 Nikki 三项 DNS 劫持关闭时启用。先检查：
 
@@ -100,35 +101,47 @@ netstat -lnptu | grep ':53 '
 /usr/bin/tgeek-mosdns dns-guard verify
 ```
 
-失败时不要强制开启；基础程序可以继续使用。LAN 客户端用路由器 DNS 及指定外部 DNS 各测试一次，观察计数。
+失败时不要强制开启；基础程序可以继续使用。
+
+在 LAN 内的 Mac 或 Linux 客户端执行（IPv6 需可用路由）：
+
+```sh
+dig @8.8.8.8 ad.doubleclick.net A +short +time=3 +tries=1
+dig @8.8.8.8 ad.doubleclick.net A +tcp +short +time=3 +tries=1
+dig @2001:4860:4860::8888 ad.doubleclick.net AAAA +short +time=3 +tries=1
+dig @2001:4860:4860::8888 ad.doubleclick.net AAAA +tcp +short +time=3 +tries=1
+dig @8.8.8.8 baidu.com A +short +time=3 +tries=1
+```
+
+预期依次返回 `0.0.0.0`、`0.0.0.0`、`::`、`::` 及正常 IPv4。回到 OpenWrt 执行：
+
+```sh
+/usr/bin/tgeek-mosdns dns-guard stats
+nft list chain inet fw4 tgeek_dns_guard | grep 'counter packets'
+```
+
+对应计数增加才确认 Guard 实际命中；NAT 计数不是全部 DNS 查询数。旧版实机补丁已通过上述四项响应测试，计数与重启恢复尚待确认。
 
 ## 4. 已安装设备覆盖升级
 
-### 当前已经是 MosDNS v2.2.1（TIJIWrt 推荐路径）
+适用于已安装 TGEEK MosDNS v2.2.0、v2.2.1 或 v2.2.2 的设备。先完成第 2 节备份与检查。
 
-不要重新安装 MosDNS 或重置 DNS Guard。只检查并升级 Ads Updater：
+```sh
+cd /tmp/TGEEK-MosDNS-2.2.2-Ads-2.0.6
+sh upgrade.sh
+```
+
+该入口使用 `upgrade --program-only`，保留现有配置、DNS Guard 与 cron，不主动重启 MosDNS 或 Nikki。缺失规则会准备；未引用则停止并提示按第 3.1 节操作。升级入口不会自动执行广告更新。
 
 ```sh
 grep '^VERSION=' /usr/bin/tgeek-mosdns
-/usr/bin/tgeek-mosdns status
-/usr/bin/tgeek-mosdns verify
-cd /tmp/TGEEK-MosDNS-2.2.1-Ads-2.0.5
-sh update-awa-mosdns-rule-v2.0.5.sh install
+/usr/bin/update-awa-mosdns-rule.sh --version
+sh verify.sh --refs
 /usr/bin/update-awa-mosdns-rule.sh update
+sh verify.sh
 ```
 
-已是 v2.0.5 且正常运行的设备也可跳过覆盖安装。若已有残留锁，先按第 8 节检查。
-
-### 从 v2.2.0 升级且启用 DNS Guard
-
-```sh
-cd /tmp/TGEEK-MosDNS-2.2.1-Ads-2.0.5
-/usr/bin/tgeek-mosdns verify
-sh tgeek-mosdns-v2.2.1-stable.sh upgrade --dns-guard
-/usr/bin/tgeek-mosdns status
-```
-
-快速路径只支持 v2.2.0/2.2.1；不主动重启 MosDNS/Nikki。仅升级基础功能、不新启用 Guard 时使用 `sh tgeek-mosdns-v2.2.1-stable.sh upgrade`（可能重启 MosDNS；不会自动关闭已有 Guard）。随后执行第 4 节的广告更新器安装步骤。其他兼容老版本先 dry-run，再使用 upgrade。
+旧于 v2.2.0 的设备不适用程序级快速升级，应先核对兼容性及备份，不强制覆盖。
 
 ## 5. 可选 Nikki 自动联动（无需手动转换）
 
@@ -142,7 +155,7 @@ command -v timeout
 /usr/bin/update-awa-mosdns-rule.sh nikki-status
 ```
 
-程序会自动转换符合模式的精确 Googlevideo CDN 域名，排除 `manifest.googlevideo.com` 及自定义安全排除，生成 `tgeek-youtube-ads` 规则集并加入 REJECT 规则，执行预检及 API 验收。日常更新通过 API 刷新；规则无变化不重启。无需手动转换或编辑运行 YAML。TIJIWrt 已验证启用后的日常无变化同步；其他设备首次启用仍须单独验收。若程序失败请保留完整日志，不连续按 Ctrl+C。
+程序会自动转换符合模式的精确 Googlevideo CDN 域名，排除 `manifest.googlevideo.com` 及自定义安全排除，生成 `tgeek-youtube-ads` 规则集并加入 REJECT 规则，执行预检及 API 验收。日常更新通过 API 刷新；规则无变化不重启。无需手动转换或编辑运行 YAML。初次启用尚待实机验收，若程序失败请保留完整日志，不连续按 Ctrl+C。
 
 运行规则文件：`/etc/nikki/run/providers/rule/tgeek-youtube-ads.txt`。如果 Nikki 重建运行目录或运行规则优先级异常，更新器可能安全停止；先看状态再执行 `nikki-enable` 修复，不盲目重启。
 
@@ -223,7 +236,7 @@ ls -ld /var/lock/tgeek-mosdns-v21.lock
 
 ### Nikki 验收失败
 
-检查程序输出、`/etc/mosdns/tgeek-ads-backup/nikki-*` 内的 `test.log`、`logread -e nikki`、`nikki-status`。日志中 `configuration ... test is successful` 表示配置预检通过，不代表 API 或实际播放已通过。不要公开 API 密钥、订阅 URL 或完整 Nikki 配置。v2.0.5 使用 `/providers/rules` 查询列表，其他设备首次启用仍须单独验收。
+检查程序输出、`/etc/mosdns/tgeek-ads-backup/nikki-*` 内的 `test.log`、`logread -e nikki`、`nikki-status`。日志中 `configuration ... test is successful` 表示配置预检通过，不代表 API 或实际播放已通过。不要公开 API 密钥、订阅 URL 或完整 Nikki 配置。v2.0.6 使用 `/providers/rules` 查询列表，首次启用仍须实机验证。
 
 若需要回退更新器，先成功执行 `nikki-disable`，再从 `/usr/bin/update-awa-mosdns-rule.sh.bak-*` 选择明确的旧版备份，确认无运行任务后 `cp -p` 恢复并验证版本。该操作只恢复脚本，不自动恢复规则内容。广告规则备份位于 `/etc/mosdns/tgeek-ads-backup/`。
 
@@ -240,132 +253,11 @@ ls -ld /var/lock/tgeek-mosdns-v21.lock
 
 ## 9. 验收清单
 
-- [ ] MosDNS v2.2.1、Ads Updater v2.0.5 版本正确。
+- [ ] MosDNS v2.2.2、Ads Updater v2.0.6 版本正确。
 - [ ] 两套广告规则已引用且非空；普通域名和 manifest 可解析，广告样本返回零地址。
 - [ ] DNS Guard 如启用，LAN 双栈测试和计数正常。
 - [ ] Nikki 如启用，API 数量与文件一致，规则优先级及正常视频播放通过。
 - [ ] 每日 03:00 更新任务仅一条；每周日 04:17 任务正确。
 - [ ] 次日实际自动更新日志成功，无残留锁。
 
-本包原有程序版本不变。2026-11-25 TIJIWrt 实机已通过覆盖安装、SHA256 校验、三个脚本语法检查、11 个域名双栈测试、Nikki 已启用状态下的无变化同步。首次全新设备安装、规则实际变化时的 API 刷新、次日定时执行和长期播放体验仍需验证。安全排除及规则数不是视频广告拦截率保证。
-
-
-## 10. 一键运行验收（全新安装和覆盖升级通用）
-
-以下命令为只读检查及 DNS 查询，不修改配置、不重启服务。单独执行并核对输出；不要把“存在文件”等同于已加载或已拦截。
-
-```sh
-echo '===== 1. 版本及服务 ====='
-grep '^VERSION=' /usr/bin/tgeek-mosdns
-/usr/bin/update-awa-mosdns-rule.sh --version
-/etc/init.d/mosdns status
-[ ! -x /etc/init.d/nikki ] || /etc/init.d/nikki status
-
-echo '===== 2. 规则文件和实际引用 ====='
-for f in awavenue.txt youtubelist.txt; do
-    p="/etc/mosdns/rule/$f"
-    if [ -s "$p" ]; then wc -l "$p"; else echo "FAIL 文件缺失或为空: $p"; fi
-    if jsonfilter -i /var/etc/mosdns.json -e '@.plugins[@.tag="adlist"].args.files[*]' | grep -Fxq "$p"; then
-        echo "PASS 已引用: $p"
-    else
-        echo "FAIL 未引用: $p"
-    fi
-done
-
-echo '===== 3. 广告执行逻辑和缓存条件 ====='
-jsonfilter -i /var/etc/mosdns.json -e '@.plugins[@.tag="query_is_reject_domain"]'
-jsonfilter -i /var/etc/mosdns.json -e '@.plugins[@.tag="main_sequence"]'
-
-echo '===== 4. 11 个广告域名双栈验证 ====='
-/usr/bin/tgeek-mosdns verify && echo 'PASS 内置验证' || echo 'FAIL 内置验证'
-
-echo '===== 5. YouTube 专用规则样本 ====='
-sample="$(awk '/^full:r[rs]?[0-9]+---sn-[a-z0-9-]+\.googlevideo\.com$/ {print substr($0,6);exit}' /etc/mosdns/rule/youtubelist.txt)"
-if [ -n "$sample" ]; then
-    echo "$sample"
-    nslookup -type=A "$sample" 127.0.0.1
-    nslookup -type=AAAA "$sample" 127.0.0.1
-else
-    echo 'FAIL 未找到 CDN 样本'
-fi
-
-echo '===== 6. 正常域名与安全排除 ====='
-nslookup -type=A www.youtube.com 127.0.0.1
-nslookup -type=A manifest.googlevideo.com 127.0.0.1
-if grep -Fxq 'full:manifest.googlevideo.com' /etc/mosdns/rule/youtubelist.txt; then
-    echo 'FAIL manifest 在 YouTube 黑名单中'
-else
-    echo 'PASS manifest 未列入 YouTube 黑名单'
-fi
-
-echo '===== 7. DNS Guard ====='
-/usr/bin/tgeek-mosdns dns-guard status
-
-echo '===== 8. Nikki 运行规则 ====='
-if [ -x /etc/init.d/nikki ]; then
-    /usr/bin/update-awa-mosdns-rule.sh nikki-status
-    if [ -s /etc/nikki/run/providers/rule/tgeek-youtube-ads.txt ]; then
-        wc -l /etc/nikki/run/providers/rule/tgeek-youtube-ads.txt
-    fi
-    sed -n '/^rules:/,$p' /etc/nikki/run/config.yaml | head -n 15
-fi
-
-echo '===== 9. 定时任务及日志 ====='
-crontab -l | grep -E 'awa|mosdns'
-tail -n 25 /var/log/awa-mosdns-update.log 2>/dev/null
-tail -n 20 /tmp/awa-mosdns-update.log 2>/dev/null
-tail -n 20 /tmp/tgeek-mosdns-update.log 2>/dev/null
-
-echo '===== 10. 互斥锁 ====='
-if [ -d /var/lock/tgeek-mosdns-v21.lock ]; then
-    echo '存在更新锁：检查是否正在执行任务，不要直接删除'
-else
-    echo 'PASS 无更新锁'
-fi
-```
-
-验收标准：两套规则引用均 PASS；内置 11 个广告样本双栈 PASS；CDN 样本 A/AAAA 分别为 0.0.0.0/::；正常 YouTube 与 manifest 返回有效非零地址；启用 Nikki 时 API 数量与规则文件行数一致、首条为专用 REJECT。未启用可选组件时相应项目不适用。DNS Guard 计数是重定向次数，不是广告命中数。
-
-### 10.1 从 LAN 客户端验证 DNS Guard（可选）
-
-先记录路由器 `tgeek-mosdns dns-guard stats` 输出。在 Mac/Linux 客户端（不是路由器 SSH）执行：
-
-```sh
-nslookup ad.doubleclick.net 8.8.8.8
-nslookup ad.doubleclick.net 2001:4860:4860::8888
-```
-
-随后在路由器再次查看 stats。若客户端具有 IPv6 连通性且对应请求经过被接管 LAN 接口，预期返回拦截地址并增加对应计数。IPv6 不可用时不能据此判定 IPv6 接管通过。传统 53 端口之外的加密 DNS 不在此测试范围内。
-
-### 10.2 验证 Nikki 实际连接拦截（可选）
-
-在 OpenWrt SSH 中逐条执行，按 curl 提示输入代理密码（示例用户名 nikki，按实际修改）。不需要公开密码或完整响应头。
-
-```sh
-curl --noproxy '' -x http://127.0.0.1:7890 --proxy-user nikki -I -sS --connect-timeout 5 --max-time 15 https://www.youtube.com/ 2>&1 | grep -Ei '^HTTP/|curl:'
-curl --noproxy '' -x http://127.0.0.1:7890 --proxy-user nikki -I -sS --connect-timeout 5 --max-time 15 https://ad.doubleclick.net/ 2>&1 | grep -Ei '^HTTP/|curl:'
-```
-
-再从 Nikki 专用文件选择一个 CDN 样本测试（仅联动启用时）：
-
-```sh
-sample="$(awk -F, '/^DOMAIN,/ {print $2;exit}' /etc/nikki/run/providers/rule/tgeek-youtube-ads.txt)"
-[ -n "$sample" ] && curl --noproxy '' -x http://127.0.0.1:7890 --proxy-user nikki -I -sS --connect-timeout 5 --max-time 15 "https://$sample/" 2>&1 | grep -Ei '^HTTP/|curl:'
-```
-
-正常主站应成功建立隧道并收到目标站 HTTP 响应；广告域名或专用 CDN 应在 Nikki 实时日志中命中 REJECT（CDN 样本应命中 tgeek-youtube-ads）。HTTP 404 表示目标站可访问；407 为认证失败；403、EOF、超时单独不能证明广告拦截成功。若正常主站也返回 403，先排查认证、规则或代理可用性。最后实际观看网页和 APP，确认正常视频播放。
-
-## 11. TIJIWrt 实机验收记录（2026-11-25）
-
-| 项目 | 实测结果 |
-|---|---|
-| 压缩包及校验 | 镜像下载 22320 字节，原发布包四项 SHA256 全部 OK |
-| MosDNS v2.2.1 | 109784 条基础规则，地址库无变化，无需重启 |
-| AWA / YouTube | 899 / 16179 条，更新成功，无变化 |
-| 安全排除 | 移除 1 条，默认保护 manifest |
-| DNS Guard | 持久配置存在，四种 TCP/UDP 双栈计数非零 |
-| DNS 广告 | 11 个域名 IPv4/IPv6 共 22 项检查通过 |
-| Nikki 联动 | 8881 条，文件内容、API 数量及首条 REJECT 校验通过，无变化不重启 |
-| 仍待验收 | 新设备全流程、变化规则动态刷新、凌晨 cron 实际运行、视频播放体验 |
-
-8881 条不是固定标准。转换器只接受符合 `r[rs]?[0-9]+---sn-...googlevideo.com` 模式的精确域名，并安全排除、去重；与 MosDNS 16179 条数量不同属于预期行为。此次记录是覆盖安装的实测证据，不是所有 YouTube 广告的拦截率。
+本包基于上一版两个脚本修订，包含首次准备规则工具和统一入口；新版整包尚未在实际 OpenWrt 路由器完成安装验收。v2.0.6 的联动尚未获得 TIJIWrt 实机成功日志，不能视为已验收的稳定联动。安全排除及规则数不是视频广告拦截率保证。
